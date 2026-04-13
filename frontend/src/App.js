@@ -11,6 +11,7 @@ import ScanResultPage from "./pages/ScanResultPage";
 import PatientsPage from "./pages/PatientsPage";
 import AdminPage from "./pages/AdminPage";
 import TrainingPage from "./pages/TrainingPage";
+import ComparePage from "./pages/ComparePage";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="/patients" element={<ProtectedRoute><PatientsPage /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
+          <Route path="/compare" element={<ProtectedRoute><ComparePage /></ProtectedRoute>} />
         </Routes>
       </HashRouter>
       <Toaster position="top-right" richColors />

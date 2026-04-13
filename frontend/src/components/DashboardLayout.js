@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LayoutDashboard, ScanLine, Users, LogOut, Menu, X, Brain, ShieldCheck, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, ScanLine, Users, LogOut, Menu, X, Brain, ShieldCheck, GraduationCap, GitCompareArrows } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
@@ -15,6 +15,7 @@ function getNavItems(role) {
   const items = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/scan', label: 'New Scan', icon: ScanLine, minRole: 'doctor' },
+    { path: '/compare', label: 'Compare', icon: GitCompareArrows },
     { path: '/patients', label: 'Patients', icon: Users },
     { path: '/training', label: 'Training', icon: GraduationCap, minRole: 'doctor' },
   ];

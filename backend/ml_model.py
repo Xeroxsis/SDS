@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import io
+import os
 import logging
 import pickle
 import base64
@@ -98,7 +99,53 @@ class StrokeDetectionModel:
         self.trained_model = None
         self.is_trained = False
         self.feature_keys = None
+        self.cnn_model = None
+        self.cnn_transform = None
+        self._load_cnn()
         logger.info("Stroke Detection Model initialized")
+
+    def _load_cnn(self):
+        """Load the pre-trained CNN model if available."""
+        cnn_path = os.path.join(os.path.dirname(__file__), "cnn_model.pt")
+        if not os.path.exists(cnn_path):
+            return
+        try:
+            import torch
+            import torch.nn as nn
+            from torchvision import models, transforms
+
+            checkpoint = torch.load(cnn_path, map_location='cpu', weights_only=False)
+            model = models.resnet18(weights=None)
+            model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(model.fc.in_features, 3))
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.eval()
+            self.cnn_model = model
+            self.cnn_classes = checkpoint.get('classes', ['hemorrhagic', 'ischemic', 'normal'])
+            self.cnn_transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+            logger.info(f"CNN model loaded (accuracy: {checkpoint.get('accuracy', 0):.1f}%)")
+        except Exception as e:
+            logger.warning(f"Failed to load CNN: {e}")
+            self.cnn_model = None
+
+    def _predict_cnn(self, image_bytes):
+        """Get CNN prediction probabilities."""
+        if self.cnn_model is None:
+            return None
+        try:
+            import torch
+            pil_img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            tensor = self.cnn_transform(pil_img).unsqueeze(0)
+            with torch.no_grad():
+                output = self.cnn_model(tensor)
+                probs = torch.softmax(output, dim=1)[0]
+            return {c: float(probs[i]) for i, c in enumerate(self.cnn_classes)}
+        except Exception as e:
+            logger.warning(f"CNN prediction failed: {e}")
+            return None
 
     def preprocess_image(self, image_bytes):
         nparr = np.frombuffer(image_bytes, np.uint8)
@@ -298,7 +345,26 @@ class StrokeDetectionModel:
         try:
             enhanced, original = self.preprocess_image(image_bytes)
             features = self.extract_features(enhanced, original)
-            classification, confidence, probabilities = self.classify(features)
+
+            # Get RF/heuristic prediction
+            rf_cls, rf_conf, rf_probs = self.classify(features)
+
+            # Get CNN prediction
+            cnn_probs = self._predict_cnn(image_bytes)
+
+            # Ensemble: blend CNN (40%) + RF (60%) when CNN available
+            if cnn_probs:
+                probabilities = {}
+                for k in ['hemorrhagic', 'ischemic', 'normal']:
+                    probabilities[k] = round(0.4 * cnn_probs.get(k, 0) + 0.6 * rf_probs.get(k, 0), 4)
+                classification = max(probabilities, key=probabilities.get)
+                confidence = probabilities[classification]
+                model_used = "ensemble (CNN + RandomForest)"
+            else:
+                probabilities = rf_probs
+                classification = rf_cls
+                confidence = rf_conf
+                model_used = "RandomForest"
 
             stroke_info = STROKE_INFO.get(classification, {})
 
@@ -320,7 +386,8 @@ class StrokeDetectionModel:
                 'confidence': confidence,
                 'probabilities': probabilities,
                 'features': key_features,
-                'stroke_info': stroke_info
+                'stroke_info': stroke_info,
+                'model_used': model_used
             }
         except Exception as e:
             logger.error(f"Prediction error: {e}")

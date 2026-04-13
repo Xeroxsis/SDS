@@ -1,0 +1,11 @@
+{
+  "model_type": "resnet18",
+  "classes": [
+    "hemorrhagic",
+    "ischemic",
+    "normal"
+  ],
+  "accuracy": 85.49618320610686,
+  "img_size": 224,
+  "path": "/app/backend/cnn_model.pt"
+}

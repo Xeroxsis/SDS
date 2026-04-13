@@ -396,6 +396,33 @@ async def get_scan_pdf(scan_id: str, request: Request):
     )
 
 
+# --- Scan Comparison ---
+@api_router.get("/scans/compare/{scan_a_id}/{scan_b_id}")
+async def compare_scans(scan_a_id: str, scan_b_id: str, request: Request):
+    user = await get_current_user(request)
+    scan_a = await db.scans.find_one({"id": scan_a_id, "user_id": user["_id"]}, {"_id": 0})
+    scan_b = await db.scans.find_one({"id": scan_b_id, "user_id": user["_id"]}, {"_id": 0})
+    if not scan_a or not scan_b:
+        raise HTTPException(status_code=404, detail="One or both scans not found")
+
+    # Compute feature deltas
+    deltas = {}
+    if scan_a.get("features") and scan_b.get("features"):
+        for key in scan_a["features"]:
+            if key in scan_b["features"]:
+                va = scan_a["features"][key]
+                vb = scan_b["features"][key]
+                if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+                    deltas[key] = {"scan_a": va, "scan_b": vb, "delta": round(vb - va, 4)}
+
+    return {
+        "scan_a": {k: v for k, v in scan_a.items() if k != "stroke_info"},
+        "scan_b": {k: v for k, v in scan_b.items() if k != "stroke_info"},
+        "feature_deltas": deltas,
+        "classification_match": scan_a.get("classification") == scan_b.get("classification")
+    }
+
+
 # --- Dashboard ---
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(request: Request):
